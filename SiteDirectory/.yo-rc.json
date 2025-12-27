@@ -1,0 +1,22 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "whichFolder": "subdir",
+    "solutionName": "SiteDirectory",
+    "useGulp": false,
+    "componentType": "webpart",
+    "template": "react",
+    "componentName": "SiteDirectory",
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.18.0",
+    "sdksVersions": {},
+    "version": "1.22.1",
+    "libraryName": "site-directory",
+    "libraryId": "fc9d31a3-e3ef-4841-94e5-343dd0afba79",
+    "environment": "spo",
+    "packageManager": "npm",
+    "solutionShortDescription": "SiteDirectory description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false
+  }
+}

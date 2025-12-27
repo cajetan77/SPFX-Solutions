@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "site-directory-client-side-solution",
+    "id": "fc9d31a3-e3ef-4841-94e5-343dd0afba79",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.22.1"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "SiteDirectory description"
+      },
+      "longDescription": {
+        "default": "SiteDirectory description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "site-directory Feature",
+        "description": "The feature that activates elements of the site-directory solution.",
+        "id": "e903d644-0410-45db-997a-e07bd205d0ef",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/site-directory.sppkg"
+  }
+}
