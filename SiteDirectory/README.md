@@ -51,8 +51,7 @@ The **Site Directory** web part is a SharePoint Framework (SPFx) solution that p
 
 | Version | Date             | Comments        |
 | ------- | ---------------- | --------------- |
-| 1.1     | March 10, 2021   | Update comment  |
-| 1.0     | January 29, 2021 | Initial release |
+| 1.0     | December 28, 2025 | Initial release |
 
 ## Disclaimer
 
@@ -81,11 +80,8 @@ This web part demonstrates the following SharePoint Framework concepts and capab
 - **React Component Architecture**: Built with React and TypeScript for type-safe, component-based development
 - **Fluent UI Components**: Leverages Microsoft Fluent UI (formerly Office UI Fabric) for consistent, accessible UI components
 - **SPHttpClient Usage**: Demonstrates proper use of SPHttpClient for authenticated SharePoint API calls
-- **Error Handling**: Implements comprehensive error handling with user-friendly error messages
-- **Loading States**: Shows appropriate loading indicators during asynchronous operations
 - **Property Pane Configuration**: Configurable web part properties (description and column layout)
-- **Theme Variants Support**: Automatically adapts to SharePoint site themes
-- **Multi-Host Compatibility**: Supports SharePoint pages, Teams tabs, and Teams personal apps
+
 - **Tree View Component**: Custom tree view implementation with expand/collapse functionality
 
 > Notice that better pictures and documentation will increase the sample usage and the value you are providing for others. Thanks for your submissions advance.
