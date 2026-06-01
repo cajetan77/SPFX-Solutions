@@ -1,0 +1,22 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "whichFolder": "subdir",
+    "solutionName": "DeskBooking",
+    "useGulp": false,
+    "componentType": "webpart",
+    "template": "react",
+    "componentName": "DeskBooking",
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.14.0",
+    "sdksVersions": {},
+    "version": "1.22.2",
+    "libraryName": "desk-booking",
+    "libraryId": "d6c29001-4a0b-47bf-a06a-6b41a2db1f4b",
+    "environment": "spo",
+    "packageManager": "npm",
+    "solutionShortDescription": "DeskBooking description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Elements xmlns="http://schemas.microsoft.com/sharepoint/">
+  <!--
+    Lists are provisioned using provisioning/Create-DeskBookingLists.ps1.
+    Deploy this SPFx package, run the script against your site, then add the web part to a page.
+  -->
+</Elements>
