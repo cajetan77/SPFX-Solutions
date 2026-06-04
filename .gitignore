@@ -14,7 +14,6 @@ lib-commonjs
 lib-esm
 jest-output
 release
-solution
 temp
 *.sppkg
 .heft
