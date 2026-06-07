@@ -4,8 +4,12 @@ import {
   DatePicker,
   DayOfWeek,
   DefaultButton,
+  Dialog,
+  DialogFooter,
+  DialogType,
   Dropdown,
   IDropdownOption,
+  IPersonaProps,
   Label,
   MessageBar,
   MessageBarType,
@@ -16,6 +20,11 @@ import {
   Text,
   TextField
 } from '@fluentui/react';
+import {
+  PeoplePicker,
+  PrincipalType,
+  type IPeoplePickerContext
+} from '@pnp/spfx-controls-react/lib/PeoplePicker';
 import styles from './DeskBooking.module.scss';
 import type { IDeskBookingProps } from './IDeskBookingProps';
 import { DeskBookingService } from '../services/DeskBookingService';
@@ -26,24 +35,47 @@ import {
   IDeskWithStatus
 } from '../models/IModels';
 import {
+  FIXED_BOOKING_END_TIME,
+  FIXED_BOOKING_START_TIME,
   formatDisplayDate,
   generateTimeSlots,
+  getTodayDate,
   isWeekday,
   timesOverlap
 } from '../utils/dateTimeUtils';
 import {
   canCancelBooking,
+  hasBookerBookingOnDate,
   hasConflictingBooking,
+  isBookingAdmin,
+  isValidCancelCode,
+  parseAdminEmails,
   validateBookerDetails,
   validateBookingRequest
 } from '../utils/bookingRules';
 
 const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
-  const { context, deskMasterListTitle, deskBookingListTitle } = props;
+  const {
+    context,
+    deskMasterListTitle,
+    deskBookingListTitle,
+    settingsListTitle,
+    adminEmails,
+    bookForMeOnly,
+    allowAnyDayBooking
+  } = props;
+  const currentUserName = context.pageContext.user.displayName || '';
+  const currentUserEmail = context.pageContext.user.email || '';
 
   const service = useMemo(
-    () => new DeskBookingService(context, deskMasterListTitle, deskBookingListTitle),
-    [context, deskMasterListTitle, deskBookingListTitle]
+    () => new DeskBookingService(context, deskMasterListTitle, deskBookingListTitle, settingsListTitle),
+    [context, deskMasterListTitle, deskBookingListTitle, settingsListTitle]
+  );
+
+  const bookingAdminEmails = useMemo(() => parseAdminEmails(adminEmails), [adminEmails]);
+  const isCurrentUserAdmin = useMemo(
+    () => isBookingAdmin(currentUserEmail, bookingAdminEmails),
+    [bookingAdminEmails, currentUserEmail]
   );
 
   const timeSlots = useMemo(() => generateTimeSlots(), []);
@@ -54,10 +86,32 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
 
   const [bookerName, setBookerName] = useState<string>('');
   const [bookerEmail, setBookerEmail] = useState<string>('');
-  const [selectedDate, setSelectedDate] = useState<Date>(() => getNextWeekday(new Date()));
-  const [startTime, setStartTime] = useState<string>('09:00');
-  const [endTime, setEndTime] = useState<string>('17:00');
+  const [bookerPersonId, setBookerPersonId] = useState<number | undefined>(undefined);
+
+  const peoplePickerContext = useMemo(
+    () => ({
+      absoluteUrl: context.pageContext.web.absoluteUrl,
+      msGraphClientFactory: context.msGraphClientFactory,
+      spHttpClient: context.spHttpClient
+    } as unknown as IPeoplePickerContext),
+    [context]
+  );
+
+  const defaultSelectedUsers = useMemo(
+    () => (bookForMeOnly && currentUserEmail ? [currentUserEmail] : undefined),
+    [bookForMeOnly, currentUserEmail]
+  );
+  const [selectedDate, setSelectedDate] = useState<Date>(() =>
+    allowAnyDayBooking ? getNextWeekday(new Date()) : getTodayDate()
+  );
+  const isBookingDay = isWeekday(allowAnyDayBooking ? selectedDate : getTodayDate());
+  const [startTime, setStartTime] = useState<string>(FIXED_BOOKING_START_TIME);
+  const [endTime, setEndTime] = useState<string>(FIXED_BOOKING_END_TIME);
+
+  const effectiveStartTime = allowAnyDayBooking ? startTime : FIXED_BOOKING_START_TIME;
+  const effectiveEndTime = allowAnyDayBooking ? endTime : FIXED_BOOKING_END_TIME;
   const [desks, setDesks] = useState<IDeskWithStatus[]>([]);
+  const [bookingsForSelectedDate, setBookingsForSelectedDate] = useState<IBooking[]>([]);
   const [yourBookings, setYourBookings] = useState<IBooking[]>([]);
   const [bookingsLoaded, setBookingsLoaded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -65,6 +119,11 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
   const [actionInProgress, setActionInProgress] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
+  const [cancelDialogVisible, setCancelDialogVisible] = useState<boolean>(false);
+  const [cancelCodeInput, setCancelCodeInput] = useState<string>('');
+  const [cancelCodeError, setCancelCodeError] = useState<string | undefined>(undefined);
+  const [expectedCancelCode, setExpectedCancelCode] = useState<string>('');
+  const [pendingCancelBooking, setPendingCancelBooking] = useState<IBooking | undefined>(undefined);
 
   const loadDesks = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -80,26 +139,77 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
 
       const desksWithStatus: IDeskWithStatus[] = activeDesks.map(desk => {
         const deskBookings = activeBookings.filter(booking => booking.deskId === desk.id);
-        const isBooked = deskBookings.some(booking =>
-          timesOverlap(startTime, endTime, booking.startTime, booking.endTime)
+        const overlappingBooking = deskBookings.find(booking =>
+          timesOverlap(effectiveStartTime, effectiveEndTime, booking.startTime, booking.endTime)
         );
 
         return {
           ...desk,
-          displayStatus: isBooked ? DeskDisplayStatus.Booked : DeskDisplayStatus.Available
+          displayStatus: overlappingBooking ? DeskDisplayStatus.Booked : DeskDisplayStatus.Available,
+          bookedByName: overlappingBooking?.bookerName,
+          activeBookingId: overlappingBooking?.id
         };
       });
 
       setDesks(desksWithStatus);
+      setBookingsForSelectedDate(bookingsForDate);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, [endTime, selectedDate, service, startTime]);
+  }, [effectiveEndTime, effectiveStartTime, selectedDate, service]);
+
+  const bookerAlreadyBookedOnDate = useMemo(
+    () => !!bookerEmail && hasBookerBookingOnDate(bookerEmail, selectedDate, bookingsForSelectedDate),
+    [bookerEmail, bookingsForSelectedDate, selectedDate]
+  );
+
+  const handleBookerPersonChange = useCallback(async (users: IPersonaProps[]): Promise<void> => {
+    if (!users?.length) {
+      setBookerPersonId(undefined);
+      setBookerName('');
+      setBookerEmail('');
+      setBookingsLoaded(false);
+      return;
+    }
+
+    const user = users[0];
+    setBookerName(user.text || '');
+    setBookerEmail(user.secondaryText || '');
+    setBookingsLoaded(false);
+    setErrorMessage(undefined);
+
+    const numericId = Number(user.id);
+    if (!isNaN(numericId) && numericId > 0) {
+      setBookerPersonId(numericId);
+      return;
+    }
+
+    const pickerUser = user as IPersonaProps & { loginName?: string };
+    const loginName = pickerUser.loginName || user.id;
+    if (!loginName) {
+      setBookerPersonId(undefined);
+      return;
+    }
+
+    try {
+      const id = await service.resolveUserId(String(loginName));
+      setBookerPersonId(id);
+    } catch (error) {
+      setBookerPersonId(undefined);
+      setErrorMessage(getErrorMessage(error));
+    }
+  }, [service]);
 
   const loadYourBookings = useCallback(async (): Promise<void> => {
     const validation = validateBookerDetails({ name: bookerName, email: bookerEmail });
+
+    if (!bookerPersonId) {
+      setErrorMessage('Please select a person.');
+      return;
+    }
+
     if (!validation.isValid) {
       setErrorMessage(validation.message);
       return;
@@ -117,7 +227,53 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
     } finally {
       setLoadingBookings(false);
     }
-  }, [bookerEmail, bookerName, service]);
+  }, [bookerEmail, bookerName, bookerPersonId, service]);
+
+  useEffect(() => {
+    if (!bookForMeOnly) {
+      setBookerName('');
+      setBookerEmail('');
+      setBookerPersonId(undefined);
+      setBookingsLoaded(false);
+      return;
+    }
+
+    setBookerName(currentUserName);
+    setBookerEmail(currentUserEmail);
+    setBookingsLoaded(false);
+
+    const loginName = context.pageContext.user.loginName;
+    if (!loginName) {
+      setBookerPersonId(undefined);
+      return;
+    }
+
+    let cancelled = false;
+
+    service.resolveUserId(loginName)
+      .then(id => {
+        if (!cancelled) {
+          setBookerPersonId(id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBookerPersonId(undefined);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookForMeOnly, context.pageContext.user.loginName, currentUserEmail, currentUserName, service]);
+
+  useEffect(() => {
+    if (!allowAnyDayBooking) {
+      setSelectedDate(getTodayDate());
+      setStartTime(FIXED_BOOKING_START_TIME);
+      setEndTime(FIXED_BOOKING_END_TIME);
+    }
+  }, [allowAnyDayBooking]);
 
   useEffect(() => {
     loadDesks().catch(() => {
@@ -144,13 +300,22 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
     const request = {
       deskId,
       bookingDate: selectedDate,
-      startTime,
-      endTime,
+      startTime: effectiveStartTime,
+      endTime: effectiveEndTime,
       bookerName,
-      bookerEmail
+      bookerEmail,
+      bookerPersonId
     };
 
-    const validation = validateBookingRequest(request);
+    if (!allowAnyDayBooking && !isBookingDay) {
+      setErrorMessage('Desk booking is only available on weekdays (Monday through Friday).');
+      return;
+    }
+
+    const validation = validateBookingRequest(request, {
+      todayOnly: !allowAnyDayBooking,
+      requirePerson: true
+    });
     if (!validation.isValid) {
       setErrorMessage(validation.message);
       return;
@@ -168,6 +333,11 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
         return;
       }
 
+      if (hasBookerBookingOnDate(bookerEmail, selectedDate, bookingsForDate)) {
+        setErrorMessage('This person already has a desk booked for the selected date. Cancel that booking before booking another desk.');
+        return;
+      }
+
       await service.createBooking(request);
       setSuccessMessage('Desk booked successfully.');
       await loadDesks();
@@ -181,9 +351,45 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
     }
   };
 
-  const handleCancelBooking = async (booking: IBooking): Promise<void> => {
-    if (!canCancelBooking(booking, bookerEmail)) {
-      setErrorMessage('You can only cancel bookings that match the email address you entered.');
+  const openCancelDialog = async (booking: IBooking): Promise<void> => {
+    if (!canCancelBooking(booking, currentUserEmail, isCurrentUserAdmin)) {
+      setErrorMessage('You do not have permission to cancel this booking.');
+      return;
+    }
+
+    setPendingCancelBooking(booking);
+    setCancelCodeInput('');
+    setCancelCodeError(undefined);
+    setExpectedCancelCode('');
+    setCancelDialogVisible(true);
+
+    try {
+      const code = await service.getCancelConfirmationCode();
+      setExpectedCancelCode(code);
+
+      if (!code) {
+        setCancelCodeError('Cancellation code is not configured in the settings list.');
+      }
+    } catch (error) {
+      setCancelCodeError(getErrorMessage(error));
+    }
+  };
+
+  const closeCancelDialog = (): void => {
+    setCancelDialogVisible(false);
+    setPendingCancelBooking(undefined);
+    setCancelCodeInput('');
+    setCancelCodeError(undefined);
+    setExpectedCancelCode('');
+  };
+
+  const handleConfirmCancel = async (): Promise<void> => {
+    if (!pendingCancelBooking) {
+      return;
+    }
+
+    if (!isValidCancelCode(cancelCodeInput, expectedCancelCode)) {
+      setCancelCodeError('Invalid cancellation code. Please try again.');
       return;
     }
 
@@ -192,10 +398,14 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
     setSuccessMessage(undefined);
 
     try {
-      await service.cancelBooking(booking.id);
+      await service.cancelBooking(pendingCancelBooking.id);
+      closeCancelDialog();
       setSuccessMessage('Booking cancelled successfully.');
       await loadDesks();
-      await loadYourBookings();
+
+      if (bookingsLoaded) {
+        await loadYourBookings();
+      }
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -214,7 +424,9 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
         <Stack tokens={{ childrenGap: 4 }}>
           <Text variant="xLarge" block>Desk Booking</Text>
           <Text variant="medium" block>
-            Enter your name and email to book a desk for a weekday between 7:00 AM and 6:00 PM.
+            {bookForMeOnly
+              ? `Book a desk for yourself${allowAnyDayBooking ? ' on a weekday between 7:00 AM and 6:00 PM' : ' for today only (9:00 AM – 5:00 PM)'}.`
+              : `Select a person to book a desk for${allowAnyDayBooking ? ' on any future weekday between 7:00 AM and 6:00 PM' : ' for today only (9:00 AM – 5:00 PM)'}.`}
           </Text>
         </Stack>
 
@@ -231,58 +443,86 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
         )}
 
         <Stack horizontal wrap tokens={{ childrenGap: 16 }} verticalAlign="end" className={styles.filters}>
-          <Stack.Item grow={1} styles={{ root: { minWidth: 220 } }}>
-            <TextField
-              label="Your name"
-              value={bookerName}
-              onChange={(_, value) => setBookerName(value || '')}
-              required
-              placeholder="Enter your full name"
-            />
-          </Stack.Item>
-          <Stack.Item grow={1} styles={{ root: { minWidth: 220 } }}>
-            <TextField
-              label="Your email"
-              value={bookerEmail}
-              onChange={(_, value) => {
-                setBookerEmail(value || '');
-                setBookingsLoaded(false);
+          <Stack.Item grow={1} styles={{ root: { minWidth: 320, maxWidth: 480 } }}>
+            <PeoplePicker
+              key={bookForMeOnly ? 'booker-picker-me' : 'booker-picker-any'}
+              context={peoplePickerContext}
+              ensureUser={true}
+              titleText={bookForMeOnly ? 'Booked for' : 'Book for'}
+              personSelectionLimit={1}
+              showtooltip={true}
+              required={true}
+              disabled={bookForMeOnly || actionInProgress}
+              defaultSelectedUsers={defaultSelectedUsers}
+              principalTypes={[PrincipalType.User]}
+              resolveDelay={300}
+              onChange={(users) => {
+                if (bookForMeOnly) {
+                  return;
+                }
+
+                handleBookerPersonChange(users).catch(() => {
+                  // Error state is handled in handleBookerPersonChange.
+                });
               }}
-              required
-              placeholder="Enter your email address"
             />
           </Stack.Item>
         </Stack>
 
         <Stack horizontal wrap tokens={{ childrenGap: 16 }} verticalAlign="end" className={styles.filters}>
           <Stack.Item grow={1} styles={{ root: { minWidth: 220 } }}>
-            <DatePicker
-              label="Booking date"
-              value={selectedDate}
-              onSelectDate={handleDateChange}
-              firstDayOfWeek={DayOfWeek.Monday}
-              isRequired
-              placeholder="Select a weekday"
-              ariaLabel="Booking date"
-            />
+            {allowAnyDayBooking ? (
+              <DatePicker
+                label="Booking date"
+                value={selectedDate}
+                onSelectDate={handleDateChange}
+                firstDayOfWeek={DayOfWeek.Monday}
+                minDate={getTodayDate()}
+                isRequired
+                placeholder="Select a weekday"
+                ariaLabel="Booking date"
+              />
+            ) : (
+              <TextField
+                label="Booking date"
+                value={formatDisplayDate(getTodayDate())}
+                readOnly
+              />
+            )}
           </Stack.Item>
           <Stack.Item grow={1} styles={{ root: { minWidth: 180 } }}>
-            <Dropdown
-              label="Start time"
-              selectedKey={startTime}
-              options={timeOptions}
-              onChange={(_, option) => option && setStartTime(option.key as string)}
-              required
-            />
+            {allowAnyDayBooking ? (
+              <Dropdown
+                label="Start time"
+                selectedKey={startTime}
+                options={timeOptions}
+                onChange={(_, option) => option && setStartTime(option.key as string)}
+                required
+              />
+            ) : (
+              <TextField
+                label="Start time"
+                value={FIXED_BOOKING_START_TIME}
+                readOnly
+              />
+            )}
           </Stack.Item>
           <Stack.Item grow={1} styles={{ root: { minWidth: 180 } }}>
-            <Dropdown
-              label="End time"
-              selectedKey={endTime}
-              options={timeOptions}
-              onChange={(_, option) => option && setEndTime(option.key as string)}
-              required
-            />
+            {allowAnyDayBooking ? (
+              <Dropdown
+                label="End time"
+                selectedKey={endTime}
+                options={timeOptions}
+                onChange={(_, option) => option && setEndTime(option.key as string)}
+                required
+              />
+            ) : (
+              <TextField
+                label="End time"
+                value={FIXED_BOOKING_END_TIME}
+                readOnly
+              />
+            )}
           </Stack.Item>
           <Stack.Item>
             <DefaultButton text="Refresh" onClick={() => loadDesks()} disabled={loading || actionInProgress} />
@@ -292,7 +532,15 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
         <Stack tokens={{ childrenGap: 12 }}>
           <Label>Available desks for {formatDisplayDate(selectedDate)}</Label>
 
-          {loading ? (
+          {!allowAnyDayBooking && !isBookingDay ? (
+            <MessageBar messageBarType={MessageBarType.warning}>
+              Desk booking is only available on weekdays. Today is not a booking day.
+            </MessageBar>
+          ) : bookerAlreadyBookedOnDate ? (
+            <MessageBar messageBarType={MessageBarType.warning}>
+              {bookerName || 'This person'} already has a desk booked for {formatDisplayDate(selectedDate)}. Cancel that booking before booking another desk.
+            </MessageBar>
+          ) : loading ? (
             <Spinner size={SpinnerSize.large} label="Loading desks..." />
           ) : desks.length === 0 ? (
             <MessageBar messageBarType={MessageBarType.info}>
@@ -308,11 +556,49 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
                     <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 8 }}>
                       {renderStatusBadge(desk.displayStatus)}
                     </Stack>
-                    <PrimaryButton
-                      text="Book"
-                      disabled={desk.displayStatus !== DeskDisplayStatus.Available || actionInProgress}
-                      onClick={() => handleBookDesk(desk.id)}
-                    />
+                    {desk.displayStatus === DeskDisplayStatus.Booked && desk.bookedByName && (
+                      <Text variant="small" block className={styles.bookedBy}>
+                        Booked by {desk.bookedByName}
+                      </Text>
+                    )}
+                    <Stack horizontal tokens={{ childrenGap: 8 }} className={styles.cardActions}>
+                      <PrimaryButton
+                        text="Book"
+                        disabled={
+                          (!allowAnyDayBooking && !isBookingDay)
+                          || !bookerPersonId
+                          || bookerAlreadyBookedOnDate
+                          || desk.displayStatus !== DeskDisplayStatus.Available
+                          || actionInProgress
+                        }
+                        onClick={() => handleBookDesk(desk.id)}
+                      />
+                      {isCurrentUserAdmin && (
+                        <DefaultButton
+                          text="Cancel booking"
+                          disabled={
+                            desk.displayStatus !== DeskDisplayStatus.Booked
+                            || !desk.activeBookingId
+                            || actionInProgress
+                          }
+                          onClick={() => {
+                            openCancelDialog({
+                              id: desk.activeBookingId!,
+                              deskId: desk.id,
+                              deskName: desk.deskName,
+                              bookingDate: selectedDate,
+                              startTime: effectiveStartTime,
+                              endTime: effectiveEndTime,
+                              bookerName: desk.bookedByName || '',
+                              bookerEmail: '',
+                              bookingStatus: BookingStatus.Booked
+                            }).catch(() => {
+                              // Error state is handled in openCancelDialog.
+                            });
+                          }}
+                        />
+                      )}
+                    </Stack>
                   </Stack>
                 </div>
               ))}
@@ -330,7 +616,11 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
             />
           </Stack>
           <Text variant="small" block>
-            Enter your email above, then click Find my bookings to view or cancel your reservations.
+            {isCurrentUserAdmin
+              ? 'As a booking admin, view bookings here and cancel from the desk cards above.'
+              : bookForMeOnly
+                ? 'Your account is shown above. Click Find my bookings to view your reservations.'
+                : 'Select a person above, then click Find my bookings to view their reservations.'}
           </Text>
 
           {loadingBookings ? (
@@ -354,15 +644,6 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
                     <Stack.Item>
                       {renderStatusBadge(booking.bookingStatus)}
                     </Stack.Item>
-                    <Stack.Item>
-                      {canCancelBooking(booking, bookerEmail) && (
-                        <DefaultButton
-                          text="Cancel"
-                          disabled={actionInProgress}
-                          onClick={() => handleCancelBooking(booking)}
-                        />
-                      )}
-                    </Stack.Item>
                   </Stack>
                 </div>
               ))}
@@ -370,6 +651,43 @@ const DeskBooking: React.FC<IDeskBookingProps> = (props) => {
           ) : null}
         </Stack>
       </Stack>
+
+      <Dialog
+        hidden={!cancelDialogVisible}
+        onDismiss={closeCancelDialog}
+        dialogContentProps={{
+          type: DialogType.normal,
+          title: 'Confirm cancellation',
+          subText: pendingCancelBooking
+            ? `Enter the cancellation code to cancel the booking for ${pendingCancelBooking.deskName}.`
+            : 'Enter the cancellation code to cancel this booking.'
+        }}
+        modalProps={{ isBlocking: true }}
+      >
+        <TextField
+          label="Cancellation code"
+          value={cancelCodeInput}
+          onChange={(_, value) => {
+            setCancelCodeInput(value || '');
+            setCancelCodeError(undefined);
+          }}
+          required
+          disabled={actionInProgress}
+          errorMessage={cancelCodeError}
+        />
+        <DialogFooter>
+          <PrimaryButton
+            text="Confirm cancel"
+            onClick={() => {
+              handleConfirmCancel().catch(() => {
+                // Error state is handled in handleConfirmCancel.
+              });
+            }}
+            disabled={actionInProgress || !cancelCodeInput.trim()}
+          />
+          <DefaultButton text="Close" onClick={closeCancelDialog} disabled={actionInProgress} />
+        </DialogFooter>
+      </Dialog>
     </section>
   );
 };

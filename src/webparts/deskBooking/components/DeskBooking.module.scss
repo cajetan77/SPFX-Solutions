@@ -63,3 +63,13 @@
   background: #f3f2f1;
   color: #605e5c;
 }
+
+.bookedBy {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+  color: var(--neutralSecondary);
+  font-style: italic;
+}
+
+.cardActions {
+  flex-wrap: wrap;
+}

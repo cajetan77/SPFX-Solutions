@@ -1,5 +1,5 @@
 import { BookingStatus, IBookerDetails, IBooking, IBookingRequest } from '../models/IModels';
-import { isSameDate, isWeekday, isWithinBusinessHours, timesOverlap } from './dateTimeUtils';
+import { isPastDate, isSameDate, isToday, isWeekday, isWithinBusinessHours, timesOverlap } from './dateTimeUtils';
 
 export interface IValidationResult {
   isValid: boolean;
@@ -10,6 +10,27 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+export function parseAdminEmails(adminEmailsConfig: string): string[] {
+  return adminEmailsConfig
+    .split(/[,;]/)
+    .map(email => normalizeEmail(email))
+    .filter(email => email.length > 0);
+}
+
+export function isBookingAdmin(currentUserEmail: string, adminEmails: string[]): boolean {
+  if (!currentUserEmail || adminEmails.length === 0) {
+    return false;
+  }
+
+  return adminEmails.indexOf(normalizeEmail(currentUserEmail)) !== -1;
+}
+
+export function isValidCancelCode(code: string, expectedCode: string): boolean {
+  const entered = code.trim();
+  const expected = expectedCode.trim();
+  return expected.length > 0 && entered.length > 0 && entered === expected;
 }
 
 export function validateBookerDetails(details: IBookerDetails): IValidationResult {
@@ -31,7 +52,14 @@ export function validateBookerDetails(details: IBookerDetails): IValidationResul
   return { isValid: true };
 }
 
-export function validateBookingRequest(request: IBookingRequest): IValidationResult {
+export function validateBookingRequest(
+  request: IBookingRequest,
+  options?: { todayOnly?: boolean; requirePerson?: boolean }
+): IValidationResult {
+  if (options?.requirePerson && !request.bookerPersonId) {
+    return { isValid: false, message: 'Please select a person to book for.' };
+  }
+
   const bookerValidation = validateBookerDetails({
     name: request.bookerName,
     email: request.bookerEmail
@@ -39,6 +67,20 @@ export function validateBookingRequest(request: IBookingRequest): IValidationRes
 
   if (!bookerValidation.isValid) {
     return bookerValidation;
+  }
+
+  if (options?.todayOnly && !isToday(request.bookingDate)) {
+    return {
+      isValid: false,
+      message: 'Bookings can only be made for today.'
+    };
+  }
+
+  if (!options?.todayOnly && isPastDate(request.bookingDate)) {
+    return {
+      isValid: false,
+      message: 'Bookings cannot be made for past dates.'
+    };
   }
 
   if (!isWeekday(request.bookingDate)) {
@@ -70,10 +112,34 @@ export function hasConflictingBooking(
   );
 }
 
+export function hasBookerBookingOnDate(
+  bookerEmail: string,
+  bookingDate: Date,
+  existingBookings: IBooking[]
+): boolean {
+  const normalizedEmail = normalizeEmail(bookerEmail);
+
+  return existingBookings.some(booking =>
+    booking.bookingStatus === BookingStatus.Booked
+    && normalizeEmail(booking.bookerEmail) === normalizedEmail
+    && isSameDate(booking.bookingDate, bookingDate)
+  );
+}
+
 export function canCancelBooking(
   booking: IBooking,
-  bookerEmail: string
+  currentUserEmail: string,
+  isAdmin: boolean
 ): boolean {
-  return booking.bookingStatus === BookingStatus.Booked
-    && normalizeEmail(booking.bookerEmail) === normalizeEmail(bookerEmail);
+  if (booking.bookingStatus !== BookingStatus.Booked) {
+    return false;
+  }
+
+  if (isAdmin) {
+    return true;
+  }
+
+  const normalizedCurrent = normalizeEmail(currentUserEmail);
+  return normalizeEmail(booking.bookerEmail) === normalizedCurrent
+    || (!!booking.createdByEmail && normalizeEmail(booking.createdByEmail) === normalizedCurrent);
 }

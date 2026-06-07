@@ -3,7 +3,8 @@ import * as ReactDom from 'react-dom';
 import { Version } from '@microsoft/sp-core-library';
 import {
   type IPropertyPaneConfiguration,
-  PropertyPaneTextField
+  PropertyPaneTextField,
+  PropertyPaneToggle
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 
@@ -14,6 +15,10 @@ import { IDeskBookingProps } from './components/IDeskBookingProps';
 export interface IDeskBookingWebPartProps {
   deskMasterListTitle: string;
   deskBookingListTitle: string;
+  settingsListTitle: string;
+  adminEmails: string;
+  bookForMeOnly: boolean;
+  allowAnyDayBooking: boolean;
 }
 
 export default class DeskBookingWebPart extends BaseClientSideWebPart<IDeskBookingWebPartProps> {
@@ -24,7 +29,11 @@ export default class DeskBookingWebPart extends BaseClientSideWebPart<IDeskBooki
       {
         context: this.context,
         deskMasterListTitle: this.properties.deskMasterListTitle || 'Desk Master',
-        deskBookingListTitle: this.properties.deskBookingListTitle || 'Desk Booking'
+        deskBookingListTitle: this.properties.deskBookingListTitle || 'Desk Booking',
+        settingsListTitle: (this.properties.settingsListTitle || 'Desk Booking settings').trim(),
+        adminEmails: this.properties.adminEmails || '',
+        bookForMeOnly: !!this.properties.bookForMeOnly,
+        allowAnyDayBooking: !!this.properties.allowAnyDayBooking
       }
     );
 
@@ -55,6 +64,35 @@ export default class DeskBookingWebPart extends BaseClientSideWebPart<IDeskBooki
                 }),
                 PropertyPaneTextField('deskBookingListTitle', {
                   label: strings.DeskBookingListTitleLabel
+                })
+              ]
+            },
+            {
+              groupName: strings.BookingOptionsGroupName,
+              groupFields: [
+                PropertyPaneToggle('bookForMeOnly', {
+                  label: strings.BookForMeOnlyLabel,
+                  onText: strings.ToggleOnText,
+                  offText: strings.ToggleOffText
+                }),
+                PropertyPaneToggle('allowAnyDayBooking', {
+                  label: strings.AllowAnyDayBookingLabel,
+                  onText: strings.ToggleOnText,
+                  offText: strings.ToggleOffText
+                })
+              ]
+            },
+            {
+              groupName: strings.AdminGroupName,
+              groupFields: [
+                PropertyPaneTextField('settingsListTitle', {
+                  label: strings.SettingsListTitleLabel
+                }),
+                PropertyPaneTextField('adminEmails', {
+                  label: strings.AdminEmailsLabel,
+                  description: strings.AdminEmailsDescription,
+                  multiline: true,
+                  rows: 3
                 })
               ]
             }

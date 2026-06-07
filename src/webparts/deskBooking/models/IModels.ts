@@ -25,11 +25,14 @@ export interface IBooking {
   endTime: string;
   bookerName: string;
   bookerEmail: string;
+  createdByEmail?: string;
   bookingStatus: BookingStatus;
 }
 
 export interface IDeskWithStatus extends IDesk {
   displayStatus: DeskDisplayStatus;
+  bookedByName?: string;
+  activeBookingId?: number;
 }
 
 export interface IBookingRequest {
@@ -39,6 +42,7 @@ export interface IBookingRequest {
   endTime: string;
   bookerName: string;
   bookerEmail: string;
+  bookerPersonId?: number;
 }
 
 export interface IBookerDetails {

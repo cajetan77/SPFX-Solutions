@@ -3,6 +3,15 @@ declare interface IDeskBookingWebPartStrings {
   BasicGroupName: string;
   DeskMasterListTitleLabel: string;
   DeskBookingListTitleLabel: string;
+  BookingOptionsGroupName: string;
+  BookForMeOnlyLabel: string;
+  AllowAnyDayBookingLabel: string;
+  AdminGroupName: string;
+  SettingsListTitleLabel: string;
+  AdminEmailsLabel: string;
+  AdminEmailsDescription: string;
+  ToggleOnText: string;
+  ToggleOffText: string;
   AppLocalEnvironmentSharePoint: string;
   AppLocalEnvironmentTeams: string;
   AppLocalEnvironmentOffice: string;

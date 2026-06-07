@@ -2,6 +2,9 @@ const BUSINESS_START_MINUTES = 7 * 60;
 const BUSINESS_END_MINUTES = 18 * 60;
 const TIME_SLOT_INTERVAL_MINUTES = 30;
 
+export const FIXED_BOOKING_START_TIME = '09:00';
+export const FIXED_BOOKING_END_TIME = '17:00';
+
 export function parseTimeToMinutes(time: string): number {
   const parts = time.split(':');
   if (parts.length !== 2) {
@@ -83,6 +86,18 @@ export function toLocalDateOnly(date: Date): Date {
 
 export function isSameDate(a: Date, b: Date): boolean {
   return toDateOnlyIsoString(a) === toDateOnlyIsoString(b);
+}
+
+export function getTodayDate(): Date {
+  return toLocalDateOnly(new Date());
+}
+
+export function isToday(date: Date): boolean {
+  return isSameDate(date, getTodayDate());
+}
+
+export function isPastDate(date: Date): boolean {
+  return toDateOnlyIsoString(date) < toDateOnlyIsoString(getTodayDate());
 }
 
 export function toSharePointBookingDate(date: Date): string {

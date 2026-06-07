@@ -23,7 +23,11 @@
     "officeFabricIconFontName": "Calendar",
     "properties": {
       "deskMasterListTitle": "Desk Master",
-      "deskBookingListTitle": "Desk Booking"
+      "deskBookingListTitle": "Desk Booking",
+      "settingsListTitle": "Desk Booking settings",
+      "adminEmails": "",
+      "bookForMeOnly": false,
+      "allowAnyDayBooking": false
     }
   }]
 }

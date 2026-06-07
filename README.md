@@ -78,10 +78,13 @@ Use the property pane to set list titles if they differ from the defaults:
 
 - Desk Master list title: `Desk Master`
 - Desk Booking list title: `Desk Booking`
+- **Book for me only** (Yes/No): when Yes, name and email are locked to the signed-in user; users cannot book for someone else
+- **Allow booking any day** (Yes/No): when Yes, users can pick a future weekday; when No, booking is for today only
 
 ## Business rules
 
 - Bookings are allowed on weekdays only
+- When future booking is disabled, bookings are for today only
 - Start and end times must fall between 7:00 AM and 6:00 PM
 - End time must be after start time
 - A desk cannot be booked twice for overlapping times on the same date

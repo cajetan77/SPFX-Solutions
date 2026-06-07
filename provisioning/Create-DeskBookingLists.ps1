@@ -21,7 +21,7 @@ function Ensure-Connected {
     param([string]$Url)
 
    
-    Connect-PnPOnline -Url $Url -Interactive -ClientId "66a1852a-1f21-46a2-ad58-35fc4c3f1530" 
+    Connect-PnPOnline -Url $Url -ClientId "dc223b11-5ab5-4a33-988a-3474b25eb9be" -Thumbprint
     
 }
 
@@ -62,6 +62,7 @@ if (-not (Get-PnPList -Identity $deskBookingTitle -ErrorAction SilentlyContinue)
     Set-PnPField -List $deskBookingList -Identity "BookingDate" -Values @{ DisplayFormat = 0; FriendlyDisplayFormat = 0 }
     Add-PnPField -List $deskBookingList -DisplayName "Start Time" -InternalName "StartTime" -Type Text -Required -AddToDefaultView
     Add-PnPField -List $deskBookingList -DisplayName "End Time" -InternalName "EndTime" -Type Text -Required -AddToDefaultView
+    Add-PnPField -List $deskBookingList -DisplayName "Booker (Internal)" -InternalName "BookerPerson" -Type User -AddToDefaultView
     Add-PnPField -List $deskBookingList -DisplayName "Booker Name" -InternalName "BookerName" -Type Text -Required -AddToDefaultView
     Add-PnPField -List $deskBookingList -DisplayName "Booker Email" -InternalName "BookerEmail" -Type Text -Required -AddToDefaultView
     Add-PnPField -List $deskBookingList -DisplayName "Booking Status" -InternalName "BookingStatus" -Type Choice -Choices "Booked", "Cancelled" -Required -AddToDefaultView
